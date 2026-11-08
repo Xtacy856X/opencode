@@ -1,6 +1,7 @@
 export * as Plugin from "./plugin.js"
 export type { StorageEntry, StorageScanOptions, StorageScanResult } from "../storage.js"
 
+export { SessionNotFoundError } from "@opencode/protocol/errors"
 export { Agent } from "@opencode/schema/agent"
 export { Artifact } from "@opencode/schema/artifact"
 export { Command } from "@opencode/schema/command"

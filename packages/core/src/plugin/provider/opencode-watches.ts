@@ -99,7 +99,7 @@ export const make = Effect.fnUntraced(function* (ctx: Context, http: HttpClient.
     const ids = events.map((event) => event.id)
     const exists = yield* ctx.session.get({ sessionID }).pipe(
       Effect.as(true),
-      Effect.catchIf(Predicate.isTagged("Session.NotFoundError"), () => Effect.succeed(false)),
+      Effect.catchIf(Predicate.isTagged("SessionNotFoundError"), () => Effect.succeed(false)),
     )
     if (!exists) {
       // A session that never lived here belongs to the member's other machine, which acknowledges its events.

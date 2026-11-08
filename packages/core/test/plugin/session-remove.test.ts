@@ -3,11 +3,19 @@ import { Plugin } from "@opencode/core/plugin"
 import { PluginHost } from "@opencode/core/plugin/host"
 import { PluginPromise } from "@opencode/core/plugin/promise"
 import { Session } from "@opencode/core/session"
+import { SessionNotFoundError } from "@opencode/plugin/effect"
 import { Effect } from "effect"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
 const it = testEffect(PluginTestLayer)
+
+const expectPublishedNotFound = (error: unknown, sessionID: string) => {
+  expect(error).toBeInstanceOf(SessionNotFoundError)
+  expect((error as SessionNotFoundError)._tag).toBe("SessionNotFoundError")
+  expect((error as SessionNotFoundError).sessionID).toBe(sessionID)
+  expect((error as SessionNotFoundError).message).toContain(sessionID)
+}
 
 it.live("Effect plugins can remove sessions and their children", () =>
   Effect.gen(function* () {
@@ -29,10 +37,7 @@ it.live("Effect plugins can remove sessions and their children", () =>
       sessionID: child.id,
     })
     expect(yield* context.session.get({ sessionID: unrelated.id })).toEqual(unrelated)
-    expect(yield* context.session.remove({ sessionID: parent.id }).pipe(Effect.flip)).toMatchObject({
-      _tag: "Session.NotFoundError",
-      sessionID: parent.id,
-    })
+    expectPublishedNotFound(yield* context.session.remove({ sessionID: parent.id }).pipe(Effect.flip), parent.id)
   }),
 )
 

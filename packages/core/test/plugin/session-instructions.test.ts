@@ -42,7 +42,9 @@ it.live("Effect plugins can put, list, and remove session instruction entries se
     expect(yield* sessions.inbox(created.id)).toEqual([])
 
     const first = yield* prepareRequest(created.id)
-    expect(Instructions.join(first.initial)).toBe(['<context key="deploy-target">', "production", "</context>"].join("\n"))
+    expect(Instructions.join(first.initial)).toBe(
+      ['<context key="deploy-target">', "production", "</context>"].join("\n"),
+    )
     expect(first.entries).toEqual([])
 
     yield* context.session.instructions.entry.put({
@@ -82,7 +84,7 @@ it.live("Effect plugins can put, list, and remove session instruction entries se
       context.session.instructions.entry.remove({ sessionID: missing, key: "deploy-target" }),
     ]) {
       expect(yield* operation.pipe(Effect.flip)).toMatchObject({
-        _tag: "Session.NotFoundError",
+        _tag: "SessionNotFoundError",
         sessionID: missing,
       })
     }
@@ -139,15 +141,15 @@ it.live("Promise plugins can put, list, and remove session instruction entries s
         ])
         const missing = Session.ID.create()
         await expect(ctx.session.instructions.entry.list({ sessionID: missing })).rejects.toMatchObject({
-          _tag: "Session.NotFoundError",
+          _tag: "SessionNotFoundError",
           sessionID: missing,
         })
         await expect(
           ctx.session.instructions.entry.put({ sessionID: missing, key: "deploy-target", value: "production" }),
-        ).rejects.toMatchObject({ _tag: "Session.NotFoundError", sessionID: missing })
+        ).rejects.toMatchObject({ _tag: "SessionNotFoundError", sessionID: missing })
         await expect(
           ctx.session.instructions.entry.remove({ sessionID: missing, key: "deploy-target" }),
-        ).rejects.toMatchObject({ _tag: "Session.NotFoundError", sessionID: missing })
+        ).rejects.toMatchObject({ _tag: "SessionNotFoundError", sessionID: missing })
         await expect(
           ctx.session.instructions.entry.put({
             sessionID: created.id,

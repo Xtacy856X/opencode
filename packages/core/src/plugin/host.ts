@@ -1,6 +1,6 @@
 export * as PluginHost from "./host.js"
 
-import { Plugin } from "@opencode/plugin/effect"
+import { Plugin, SessionNotFoundError } from "@opencode/plugin/effect"
 import type { IntegrationMethodRegistration } from "@opencode/plugin/effect/integration"
 import { EventManifest } from "@opencode/schema/event-manifest"
 import type { Event } from "@opencode/schema/event"
@@ -41,6 +41,22 @@ import type { Interface } from "../plugin.js"
 import { LayerNode } from "@opencode/util/effect/layer-node"
 
 const mutable = <T>(value: T) => value as DeepMutable<T>
+
+/**
+ * Plugin authors program against the errors the HTTP API publishes, so the in-process surface reports the same tags
+ * instead of the core services' internal ones.
+ */
+const sessionNotFound = (error: Session.NotFoundError) =>
+  new SessionNotFoundError({ sessionID: error.sessionID, message: `Session not found: ${error.sessionID}` })
+
+const publishSessionErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  effect.pipe(
+    Effect.catchIf(
+      (error) => error instanceof Session.NotFoundError,
+      (error) => Effect.fail(sessionNotFound(error as Session.NotFoundError)),
+    ),
+  )
+
 type RpcEvent = Event.Payload & {
   readonly type: `rpc.${string}`
   readonly location: Location.Ref
@@ -583,45 +599,48 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: Pick<Interfa
               }
             : { parentID: input.parentID }),
         }),
-      get: (input) => sessions.get(input.sessionID),
-      remove: (input) => sessions.remove(input.sessionID),
-      switchAgent: sessions.switchAgent,
-      switchModel: sessions.switchModel,
-      prompt: sessions.prompt,
-      generate: (input) => sessions.generate(input).pipe(Effect.map((text) => ({ text }))),
-      command: (input) => sessions.command({ ...input, command: input.name }),
-      compact: sessions.compact,
+      get: (input) => publishSessionErrors(sessions.get(input.sessionID)),
+      remove: (input) => publishSessionErrors(sessions.remove(input.sessionID)),
+      switchAgent: (input) => publishSessionErrors(sessions.switchAgent(input)),
+      switchModel: (input) => publishSessionErrors(sessions.switchModel(input)),
+      prompt: (input) => publishSessionErrors(sessions.prompt(input)),
+      generate: (input) => publishSessionErrors(sessions.generate(input)).pipe(Effect.map((text) => ({ text }))),
+      command: (input) => publishSessionErrors(sessions.command({ ...input, command: input.name })),
+      compact: (input) => publishSessionErrors(sessions.compact(input)),
       update: Effect.fn(function* (input) {
-        yield* sessions.get(input.sessionID)
-        if (input.title !== undefined) yield* sessions.rename({ sessionID: input.sessionID, title: input.title })
+        yield* publishSessionErrors(sessions.get(input.sessionID))
+        if (input.title !== undefined)
+          yield* publishSessionErrors(sessions.rename({ sessionID: input.sessionID, title: input.title }))
         if (input.metadata !== undefined)
-          yield* sessions.setMetadata({ sessionID: input.sessionID, metadata: input.metadata })
+          yield* publishSessionErrors(sessions.setMetadata({ sessionID: input.sessionID, metadata: input.metadata }))
         if (input.permissions !== undefined)
-          yield* sessions.setPermissions({ sessionID: input.sessionID, permissions: input.permissions })
+          yield* publishSessionErrors(
+            sessions.setPermissions({ sessionID: input.sessionID, permissions: input.permissions }),
+          )
       }),
-      move: sessions.move,
-      synthetic: sessions.synthetic,
+      move: (input) => publishSessionErrors(sessions.move(input)),
+      synthetic: (input) => publishSessionErrors(sessions.synthetic(input)),
       interrupt: (input) =>
-        sessions
-          .interrupt(input.sessionID, { resume: input.resume })
-          .pipe(Effect.map((interrupted) => ({ interrupted }))),
-      wait: (input) => sessions.wait(input.sessionID),
-      context: (input) => sessions.context(input.sessionID),
+        publishSessionErrors(sessions.interrupt(input.sessionID, { resume: input.resume })).pipe(
+          Effect.map((interrupted) => ({ interrupted })),
+        ),
+      wait: (input) => publishSessionErrors(sessions.wait(input.sessionID)),
+      context: (input) => publishSessionErrors(sessions.context(input.sessionID)),
       instructions: {
         entry: {
           list: Effect.fn(function* (input) {
-            yield* sessions.get(input.sessionID)
-            return yield* instructionEntries.list(input.sessionID)
+            yield* publishSessionErrors(sessions.get(input.sessionID))
+            return yield* publishSessionErrors(instructionEntries.list(input.sessionID))
           }),
           put: Effect.fn(function* (input) {
             const key = yield* Schema.decodeUnknownEffect(InstructionEntry.Key)(input.key)
-            yield* sessions.get(input.sessionID)
-            yield* instructionEntries.put({ ...input, key })
+            yield* publishSessionErrors(sessions.get(input.sessionID))
+            yield* publishSessionErrors(instructionEntries.put({ ...input, key }))
           }),
           remove: Effect.fn(function* (input) {
             const key = yield* Schema.decodeUnknownEffect(InstructionEntry.Key)(input.key)
-            yield* sessions.get(input.sessionID)
-            yield* instructionEntries.remove({ ...input, key })
+            yield* publishSessionErrors(sessions.get(input.sessionID))
+            yield* publishSessionErrors(instructionEntries.remove({ ...input, key }))
           }),
         },
       },

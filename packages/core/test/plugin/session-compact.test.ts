@@ -23,7 +23,7 @@ it.live("Effect plugins can admit session compaction", () =>
     expect(admitted).toMatchObject({ id, sessionID: created.id, type: "compaction", delivery: "queue" })
     expect(yield* sessions.inbox(created.id)).toContainEqual(admitted)
     expect(yield* context.session.compact({ sessionID: Session.ID.create() }).pipe(Effect.flip)).toMatchObject({
-      _tag: "Session.NotFoundError",
+      _tag: "SessionNotFoundError",
     })
   }),
 )
